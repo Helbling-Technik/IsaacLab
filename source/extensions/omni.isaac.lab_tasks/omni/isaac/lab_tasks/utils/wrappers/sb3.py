@@ -25,7 +25,11 @@ import torch.nn as nn  # noqa: F401
 from typing import Any
 
 from stable_baselines3.common.utils import constant_fn
-from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvObs, VecEnvStepReturn
+from stable_baselines3.common.vec_env.base_vec_env import (
+    VecEnv,
+    VecEnvObs,
+    VecEnvStepReturn,
+)
 
 from omni.isaac.lab.envs import DirectRLEnv, ManagerBasedRLEnv
 
@@ -52,13 +56,25 @@ def process_sb3_cfg(cfg: dict) -> dict:
             if isinstance(value, dict):
                 update_dict(value)
             else:
-                if key in ["policy_kwargs", "replay_buffer_class", "replay_buffer_kwargs"]:
+                if key in [
+                    "policy_kwargs",
+                    "replay_buffer_class",
+                    "replay_buffer_kwargs",
+                ]:
                     hyperparams[key] = eval(value)
-                elif key in ["learning_rate", "clip_range", "clip_range_vf", "delta_std"]:
+                elif key in [
+                    "learning_rate",
+                    "clip_range",
+                    "clip_range_vf",
+                    "delta_std",
+                ]:
                     if isinstance(value, str):
                         _, initial_value = value.split("_")
                         initial_value = float(initial_value)
-                        hyperparams[key] = lambda progress_remaining: progress_remaining * initial_value
+                        hyperparams[key] = (
+                            lambda progress_remaining: progress_remaining
+                            * initial_value
+                        )
                     elif isinstance(value, (float, int)):
                         # Negative value: ignore (ex: for clipping)
                         if value < 0:
@@ -133,7 +149,9 @@ class Sb3VecEnvWrapper(VecEnv):
             ValueError: When the environment is not an instance of :class:`ManagerBasedRLEnv`.
         """
         # check that input is valid
-        if not isinstance(env.unwrapped, ManagerBasedRLEnv) and not isinstance(env.unwrapped, DirectRLEnv):
+        if not isinstance(env.unwrapped, ManagerBasedRLEnv) and not isinstance(
+            env.unwrapped, DirectRLEnv
+        ):
             raise ValueError(
                 "The environment must be inherited from ManagerBasedRLEnv or DirectRLEnv. Environment type:"
                 f" {type(env)}"
@@ -148,9 +166,12 @@ class Sb3VecEnvWrapper(VecEnv):
         # obtain gym spaces
         # note: stable-baselines3 does not like when we have unbounded action space so
         #   we set it to some high value here. Maybe this is not general but something to think about.
-        observation_space = self.unwrapped.single_observation_space["policy"]
+        # TODO ROV was observation_space = self.unwrapped.single_observation_space["policy"], but we want all the policies in the dict
+        observation_space = self.unwrapped.single_observation_space
         action_space = self.unwrapped.single_action_space
-        if isinstance(action_space, gym.spaces.Box) and not action_space.is_bounded("both"):
+        if isinstance(action_space, gym.spaces.Box) and not action_space.is_bounded(
+            "both"
+        ):
             action_space = gym.spaces.Box(low=-100, high=100, shape=action_space.shape)
 
         # initialize vec-env
@@ -212,7 +233,9 @@ class Sb3VecEnvWrapper(VecEnv):
         # convert input to numpy array
         if not isinstance(actions, torch.Tensor):
             actions = np.asarray(actions)
-            actions = torch.from_numpy(actions).to(device=self.sim_device, dtype=torch.float32)
+            actions = torch.from_numpy(actions).to(
+                device=self.sim_device, dtype=torch.float32
+            )
         else:
             actions = actions.to(device=self.sim_device, dtype=torch.float32)
         # convert to tensor
@@ -220,7 +243,9 @@ class Sb3VecEnvWrapper(VecEnv):
 
     def step_wait(self) -> VecEnvStepReturn:  # noqa: D102
         # record step information
-        obs_dict, rew, terminated, truncated, extras = self.env.step(self._async_actions)
+        obs_dict, rew, terminated, truncated, extras = self.env.step(
+            self._async_actions
+        )
         # update episode un-discounted return and length
         self._ep_rew_buf += rew
         self._ep_len_buf += 1
@@ -265,7 +290,9 @@ class Sb3VecEnvWrapper(VecEnv):
     def set_attr(self, attr_name, value, indices=None):  # noqa: D102
         raise NotImplementedError("Setting attributes is not supported.")
 
-    def env_method(self, method_name: str, *method_args, indices=None, **method_kwargs):  # noqa: D102
+    def env_method(
+        self, method_name: str, *method_args, indices=None, **method_kwargs
+    ):  # noqa: D102
         if method_name == "render":
             # gymnasium does not support changing render mode at runtime
             return self.env.render()
@@ -276,7 +303,9 @@ class Sb3VecEnvWrapper(VecEnv):
             return env_method(*method_args, indices=indices, **method_kwargs)
 
     def env_is_wrapped(self, wrapper_class, indices=None):  # noqa: D102
-        raise NotImplementedError("Checking if environment is wrapped is not supported.")
+        raise NotImplementedError(
+            "Checking if environment is wrapped is not supported."
+        )
 
     def get_images(self):  # noqa: D102
         raise NotImplementedError("Getting images is not supported.")
@@ -285,10 +314,13 @@ class Sb3VecEnvWrapper(VecEnv):
     Helper functions.
     """
 
-    def _process_obs(self, obs_dict: torch.Tensor | dict[str, torch.Tensor]) -> np.ndarray | dict[str, np.ndarray]:
+    def _process_obs(
+        self, obs_dict: torch.Tensor | dict[str, torch.Tensor]
+    ) -> np.ndarray | dict[str, np.ndarray]:
         """Convert observations into NumPy data type."""
         # Sb3 doesn't support asymmetric observation spaces, so we only use "policy"
-        obs = obs_dict["policy"]
+        # TODO ROV was obs = obs_dict["policy"], but we want all the policies in the dict
+        obs = obs_dict
         # note: ManagerBasedRLEnv uses torch backend (by default).
         if isinstance(obs, dict):
             for key, value in obs.items():
@@ -300,11 +332,18 @@ class Sb3VecEnvWrapper(VecEnv):
         return obs
 
     def _process_extras(
-        self, obs: np.ndarray, terminated: np.ndarray, truncated: np.ndarray, extras: dict, reset_ids: np.ndarray
+        self,
+        obs: np.ndarray,
+        terminated: np.ndarray,
+        truncated: np.ndarray,
+        extras: dict,
+        reset_ids: np.ndarray,
     ) -> list[dict[str, Any]]:
         """Convert miscellaneous information into dictionary for each sub-environment."""
         # create empty list of dictionaries to fill
-        infos: list[dict[str, Any]] = [dict.fromkeys(extras.keys()) for _ in range(self.num_envs)]
+        infos: list[dict[str, Any]] = [
+            dict.fromkeys(extras.keys()) for _ in range(self.num_envs)
+        ]
         # fill-in information for each sub-environment
         # note: This loop becomes slow when number of environments is large.
         for idx in range(self.num_envs):

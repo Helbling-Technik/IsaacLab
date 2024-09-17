@@ -1153,17 +1153,19 @@ class Articulation(RigidObject):
         table.align["Name"] = "l"
         # add info on each term
         for index, name in enumerate(self.joint_names):
-            table.add_row([
-                index,
-                name,
-                stiffnesses[index],
-                dampings[index],
-                armatures[index],
-                frictions[index],
-                position_limits[index],
-                velocity_limits[index],
-                effort_limits[index],
-            ])
+            table.add_row(
+                [
+                    index,
+                    name,
+                    stiffnesses[index],
+                    dampings[index],
+                    armatures[index],
+                    frictions[index],
+                    position_limits[index],
+                    velocity_limits[index],
+                    effort_limits[index],
+                ]
+            )
         # convert table to string
         carb.log_info(f"Simulation parameters for joints in {self.cfg.prim_path}:\n" + table.get_string())
 
@@ -1191,14 +1193,16 @@ class Articulation(RigidObject):
             ]
             # add info on each term
             for index in range(self.num_fixed_tendons):
-                tendon_table.add_row([
-                    index,
-                    ft_stiffnesses[index],
-                    ft_dampings[index],
-                    ft_limit_stiffnesses[index],
-                    ft_limits[index],
-                    ft_rest_lengths[index],
-                    ft_offsets[index],
-                ])
+                tendon_table.add_row(
+                    [
+                        index,
+                        ft_stiffnesses[index],
+                        ft_dampings[index],
+                        ft_limit_stiffnesses[index],
+                        ft_limits[index],
+                        ft_rest_lengths[index],
+                        ft_offsets[index],
+                    ]
+                )
             # convert table to string
             carb.log_info(f"Simulation parameters for tendons in {self.cfg.prim_path}:\n" + tendon_table.get_string())

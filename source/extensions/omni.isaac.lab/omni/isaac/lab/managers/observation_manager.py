@@ -43,11 +43,15 @@ class ObservationManager(ManagerBase):
         self._group_obs_dim: dict[str, tuple[int, ...]] = dict()
         for group_name, group_term_dims in self._group_obs_term_dim.items():
             term_dims = [torch.tensor(dims, device="cpu") for dims in group_term_dims]
-            self._group_obs_dim[group_name] = tuple(torch.sum(torch.stack(term_dims, dim=0), dim=0).tolist())
+            self._group_obs_dim[group_name] = tuple(
+                torch.sum(torch.stack(term_dims, dim=0), dim=0).tolist()
+            )
 
     def __str__(self) -> str:
         """Returns: A string representation for the observation manager."""
-        msg = f"<ObservationManager> contains {len(self._group_obs_term_names)} groups.\n"
+        msg = (
+            f"<ObservationManager> contains {len(self._group_obs_term_names)} groups.\n"
+        )
 
         # add info for each group
         for group_name, group_dim in self._group_obs_dim.items():
@@ -243,7 +247,9 @@ class ObservationManager(ManagerBase):
                         f" Received: '{type(term_cfg)}'."
                     )
                 # resolve common terms in the config
-                self._resolve_common_term_cfg(f"{group_name}/{term_name}", term_cfg, min_argc=1)
+                self._resolve_common_term_cfg(
+                    f"{group_name}/{term_name}", term_cfg, min_argc=1
+                )
                 # check noise settings
                 if not group_cfg.enable_corruption:
                     term_cfg.noise = None
