@@ -84,6 +84,23 @@ class ImplicitActuatorCfg(ActuatorBaseCfg):
     class_type: type = actuator_pd.ImplicitActuator
 
 
+@configclass
+class DelayedImplicitActuatorCfg(ImplicitActuatorCfg):
+    """Configuration for an implicit actuator.
+
+    Note:
+        The PD control is handled implicitly by the simulation.
+    """
+
+    class_type: type = actuator_pd.DelayedImplicitActuator
+
+    min_delay: int = 0
+    """Minimum number of physics time-steps with which the actuator command may be delayed. Defaults to 0."""
+
+    max_delay: int = 0
+    """Maximum number of physics time-steps with which the actuator command may be delayed. Defaults to 0."""
+
+
 """
 Explicit Actuator Models.
 """

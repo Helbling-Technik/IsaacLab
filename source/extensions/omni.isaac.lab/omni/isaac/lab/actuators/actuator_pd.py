@@ -21,6 +21,7 @@ if TYPE_CHECKING:
         DelayedPDActuatorCfg,
         IdealPDActuatorCfg,
         ImplicitActuatorCfg,
+        DelayedImplicitActuatorCfg,
         RemotizedPDActuatorCfg,
     )
 
@@ -64,6 +65,82 @@ class ImplicitActuator(ActuatorBase):
         self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel: torch.Tensor
     ) -> ArticulationActions:
         """Compute the aproximmate torques for the actuated joint (physX does not compute this explicitly)."""
+        # store approximate torques for reward computation
+        error_pos = control_action.joint_positions - joint_pos
+        error_vel = control_action.joint_velocities - joint_vel
+        self.computed_effort = self.stiffness * error_pos + self.damping * error_vel + control_action.joint_efforts
+        # clip the torques based on the motor limits
+        self.applied_effort = self._clip_effort(self.computed_effort)
+        return control_action
+
+
+class DelayedImplicitActuator(ImplicitActuator):
+    """Implicit actuator model that is handled by the simulation.
+
+    This performs a similar function as the :class:`IdealPDActuator` class. However, the PD control is handled
+    implicitly by the simulation which performs continuous-time integration of the PD control law. This is
+    generally more accurate than the explicit PD control law used in :class:`IdealPDActuator` when the simulation
+    time-step is large.
+
+    .. note::
+
+        The articulation class sets the stiffness and damping parameters from the configuration into the simulation.
+        Thus, the parameters are not used in this class.
+
+    .. caution::
+
+        The class is only provided for consistency with the other actuator models. It does not implement any
+        functionality and should not be used. All values should be set to the simulation directly.
+    """
+
+    cfg: DelayedImplicitActuatorCfg
+    """The configuration for the actuator model."""
+
+    """
+    Operations.
+    """
+
+    def __init__(self, cfg: DelayedImplicitActuatorCfg, *args, **kwargs):
+        super().__init__(cfg, *args, **kwargs)
+        # instantiate the delay buffers
+        self.positions_delay_buffer = DelayBuffer(cfg.max_delay, self._num_envs, device=self._device)
+        self.velocities_delay_buffer = DelayBuffer(cfg.max_delay, self._num_envs, device=self._device)
+        self.efforts_delay_buffer = DelayBuffer(cfg.max_delay, self._num_envs, device=self._device)
+        # all of the envs
+        self._ALL_INDICES = torch.arange(self._num_envs, dtype=torch.long, device=self._device)
+
+    def reset(self, env_ids: Sequence[int]):
+        super().reset(env_ids)
+        # number of environments (since env_ids can be a slice)
+        if env_ids is None or env_ids == slice(None):
+            num_envs = self._num_envs
+        else:
+            num_envs = len(env_ids)
+        # set a new random delay for environments in env_ids
+        time_lags = torch.randint(
+            low=self.cfg.min_delay,
+            high=self.cfg.max_delay + 1,
+            size=(num_envs,),
+            dtype=torch.int,
+            device=self._device,
+        )
+        # set delays
+        self.positions_delay_buffer.set_time_lag(time_lags, env_ids)
+        self.velocities_delay_buffer.set_time_lag(time_lags, env_ids)
+        self.efforts_delay_buffer.set_time_lag(time_lags, env_ids)
+        # reset buffers
+        self.positions_delay_buffer.reset(env_ids)
+        self.velocities_delay_buffer.reset(env_ids)
+        self.efforts_delay_buffer.reset(env_ids)
+
+    def compute(
+        self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel: torch.Tensor
+    ) -> ArticulationActions:
+        """Compute the aproximmate torques for the actuated joint (physX does not compute this explicitly)."""
+        # apply delay based on the delay the model for all the setpoints
+        control_action.joint_positions = self.positions_delay_buffer.compute(control_action.joint_positions)
+        control_action.joint_velocities = self.velocities_delay_buffer.compute(control_action.joint_velocities)
+        control_action.joint_efforts = self.efforts_delay_buffer.compute(control_action.joint_efforts)
         # store approximate torques for reward computation
         error_pos = control_action.joint_positions - joint_pos
         error_vel = control_action.joint_velocities - joint_vel
