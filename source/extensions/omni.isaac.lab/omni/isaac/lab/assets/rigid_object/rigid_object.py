@@ -120,7 +120,7 @@ class RigidObject(AssetBase):
                 torque_data=self._external_torque_b.view(-1, 3),
                 position_data=None,
                 indices=self._ALL_INDICES,
-                is_global=False,
+                is_global=self._is_global_wrench,
             )
 
     def update(self, dt: float):
@@ -352,8 +352,9 @@ class RigidObject(AssetBase):
         torques: torch.Tensor,
         body_ids: Sequence[int] | slice | None = None,
         env_ids: Sequence[int] | None = None,
+        is_global_wrench: bool = False,
     ):
-        """Set external force and torque to apply on the asset's bodies in their local frame.
+        """Set external force and torque to apply on the asset's bodies in their local frame (or world frame).
 
         For many applications, we want to keep the applied external force on rigid bodies constant over a period of
         time (for instance, during the policy control). This function allows us to store the external force and torque
@@ -378,7 +379,10 @@ class RigidObject(AssetBase):
             torques: External torques in bodies' local frame. Shape is (len(env_ids), len(body_ids), 3).
             body_ids: Body indices to apply external wrench to. Defaults to None (all bodies).
             env_ids: Environment indices to apply external wrench to. Defaults to None (all instances).
+            is_global_wrench: Whether forces and torques are given in the world frame instead of the bodies' local
+                frame. Applies to all instances of the asset. Defaults to False.
         """
+        self._is_global_wrench = is_global_wrench
         if forces.any() or torques.any():
             self.has_external_wrench = True
             # resolve all indices
@@ -476,6 +480,7 @@ class RigidObject(AssetBase):
 
         # external forces and torques
         self.has_external_wrench = False
+        self._is_global_wrench = False
         self._external_force_b = torch.zeros((self.num_instances, self.num_bodies, 3), device=self.device)
         self._external_torque_b = torch.zeros_like(self._external_force_b)
 
